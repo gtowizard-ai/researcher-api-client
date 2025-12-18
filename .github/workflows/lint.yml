@@ -1,7 +1,12 @@
 name: Lint
 
 on:
-  workflow_call:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
 
 concurrency:
   group: Lint-${{ github.workflow }}-${{ github.ref || github.run_id }}
