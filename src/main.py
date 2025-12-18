@@ -1,7 +1,6 @@
 import asyncio
 import random
 import time
-
 from http import HTTPStatus
 
 import httpx
@@ -9,8 +8,7 @@ import structlog
 from fire import Fire
 from tqdm.asyncio import tqdm
 
-from poker_agent import PokerAgent, AllinAgent, CheckCallAgent
-
+from poker_agent import AllinAgent, CheckCallAgent, PokerAgent
 
 _NUM_HANDS = 1000
 _RETRY_BASE_DELAY = 2.0
@@ -66,10 +64,7 @@ class AgentRunner:
                 response.raise_for_status()
                 return response
             except httpx.HTTPStatusError as e:
-                if (
-                    e.response.status_code != HTTPStatus.SERVICE_UNAVAILABLE
-                    or attempt == max_retries - 1
-                ):
+                if e.response.status_code != HTTPStatus.SERVICE_UNAVAILABLE or attempt == max_retries - 1:
                     raise
             delay = min(_RETRY_BASE_DELAY * (2**attempt), _RETRY_MAX_DELAY)
             sleep_time = random.uniform(1.0, delay)
@@ -87,9 +82,7 @@ class AgentRunner:
 
     async def _act(self, hand_id: int, game_state: dict) -> dict:
         action_request = await self._agent.act(game_state)
-        response = await self._post_with_retry(
-            f"/hands/{hand_id}/act", json_data=action_request, hand_id=hand_id
-        )
+        response = await self._post_with_retry(f"/hands/{hand_id}/act", json_data=action_request, hand_id=hand_id)
         return response.json()
 
     async def _play_hand(self) -> bool:
@@ -103,9 +96,7 @@ class AgentRunner:
                     response = await self._act(hand_id, response)
                 return True
             except httpx.HTTPStatusError as e:
-                logger.error(
-                    f"API Error: {e.response.text}", extra={"hand_id": hand_id}
-                )
+                logger.error(f"API Error: {e.response.text}", extra={"hand_id": hand_id})
                 return False
             except Exception as e:
                 logger.error(f"Unexpected error: {e}", extra={"hand_id": hand_id})
@@ -141,9 +132,7 @@ async def main(api_key: str, agent: str = "allin", hands: int = _NUM_HANDS):
     """
     agent_class = _AGENTS.get(agent.lower())
     if agent_class is None:
-        raise ValueError(
-            f"Unknown agent: {agent}. Available: {', '.join(_AGENTS.keys())}"
-        )
+        raise ValueError(f"Unknown agent: {agent}. Available: {', '.join(_AGENTS.keys())}")
     agent = agent_class()
     async with AgentRunner.from_config(agent, api_key) as runner:
         await runner.run(hands)

@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [tool.ruff]
-src = ["pysrc"]
+src = ["src"]
 exclude = [
     ".bzr",
     ".direnv",
