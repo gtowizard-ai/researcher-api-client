@@ -10,7 +10,6 @@ from tqdm.asyncio import tqdm
 
 from poker_agent import AllinAgent, CheckCallAgent, PokerAgent
 
-_NUM_HANDS = 1000
 _RETRY_BASE_DELAY = 2.0
 _RETRY_MAX_DELAY = 15.0
 _DEFAULT_GAME_NAME = "HUNL 200BB"
@@ -50,7 +49,6 @@ class AgentRunner:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._client.aclose()
 
-    # 503 errors are expected under high concurrency; retry with exponential backoff
     async def _post_with_retry(
         self,
         url: str,
@@ -58,6 +56,10 @@ class AgentRunner:
         max_retries: int = 20,
         hand_id: int | None = None,
     ) -> httpx.Response:
+        """
+        POST request with exponential backoff retry for 503 errors.
+        503 errors are expected under high concurrency.
+        """
         for attempt in range(max_retries):
             try:
                 response = await self._client.post(url, json=json_data)
@@ -122,20 +124,20 @@ class AgentRunner:
         )
 
 
-async def main(api_key: str, agent: str = "allin", hands: int = _NUM_HANDS):
+async def main(api_key: str, agent: str = "allin", num_hands: int = 1000):
     """
-    Plays N hands against GTO Wizard AI.
+    Play `num_hands` hands against GTO Wizard AI.
     Args:
          api_key: User API Key to the Researcher API
          agent: The poker agent to use
-         hands: Total hands to be played
+         num_hands: Total hands to be played
     """
     agent_class = _AGENTS.get(agent.lower())
     if agent_class is None:
         raise ValueError(f"Unknown agent: {agent}. Available: {', '.join(_AGENTS.keys())}")
     agent = agent_class()
     async with AgentRunner.from_config(agent, api_key) as runner:
-        await runner.run(hands)
+        await runner.run(num_hands)
 
 
 if __name__ == "__main__":
