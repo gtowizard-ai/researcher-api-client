@@ -15,6 +15,10 @@ class CheckCallAgent:
 class AllinAgent:
     async def act(self, response: dict) -> dict:
         legal_actions = response["game_state"]["legal_actions"]
-        action = "b" if "b" in legal_actions else "c"
-        amount = response["game_state"]["raise_range"]["max"]
+        if "b" in legal_actions:
+            action = "b"
+            amount = response["game_state"]["raise_range"]["max"]
+        else:
+            action = "c"
+            amount = None
         return {"action": action, "amount": amount}
