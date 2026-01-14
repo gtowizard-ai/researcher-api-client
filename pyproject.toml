@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "pre-commit>=4.5.1",
     "structlog>=25.5.0",
+    "tenacity>=9.1.2",
     "tqdm>=4.67.1",
 ]
 
