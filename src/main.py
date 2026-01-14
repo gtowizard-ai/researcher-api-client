@@ -1,11 +1,11 @@
 import asyncio
-import random
 import time
 from http import HTTPStatus
 
 import httpx
 import structlog
 from fire import Fire
+from tenacity import RetryCallState, retry, retry_if_exception, stop_after_attempt, wait_exponential
 from tqdm.asyncio import tqdm
 
 from poker_agent import AllinAgent, CheckCallAgent, PokerAgent
@@ -21,6 +21,31 @@ _AGENTS = {
     "checkcall": CheckCallAgent,
 }
 logger = structlog.get_logger(__name__)
+
+
+def _is_engine_busy_exception(exception: Exception) -> bool:
+    """
+    502, 503, and 504 errors can happen under high concurrency
+    """
+    return isinstance(exception, httpx.HTTPStatusError) and exception.response.status_code in (
+        HTTPStatus.BAD_GATEWAY,
+        HTTPStatus.SERVICE_UNAVAILABLE,
+        HTTPStatus.GATEWAY_TIMEOUT,
+    )
+
+
+def _log_retry_attempt(retry_state: RetryCallState) -> None:
+    exception = retry_state.outcome.exception()
+    wait_time = retry_state.next_action.sleep
+    hand_id = retry_state.kwargs.get("hand_id")
+    if isinstance(exception, httpx.HTTPStatusError):
+        error_msg = f"{exception.response.status_code} {exception.response.reason_phrase}"
+    else:
+        error_msg = str(exception)
+    logger.debug(
+        f"Engine busy. Waiting {wait_time:.2f}s",
+        extra={"hand_id": hand_id, "attempt": retry_state.attempt_number, "error": error_msg},
+    )
 
 
 class AgentRunner:
@@ -49,33 +74,17 @@ class AgentRunner:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self._client.aclose()
 
-    async def _post_with_retry(
-        self,
-        url: str,
-        json_data: dict,
-        max_retries: int = 20,
-        hand_id: int | None = None,
-    ) -> httpx.Response:
-        """
-        POST request with exponential backoff retry for 503 errors.
-        503 errors are expected under high concurrency.
-        """
-        for attempt in range(max_retries):
-            try:
-                response = await self._client.post(url, json=json_data)
-                response.raise_for_status()
-                return response
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code != HTTPStatus.SERVICE_UNAVAILABLE or attempt == max_retries - 1:
-                    raise
-            delay = min(_RETRY_BASE_DELAY * (2**attempt), _RETRY_MAX_DELAY)
-            sleep_time = random.uniform(1.0, delay)
-            logger.debug(
-                f"503 error. Waiting {sleep_time:.2f}s",
-                extra={"attempt": attempt + 1, "hand_id": hand_id},
-            )
-            await asyncio.sleep(sleep_time)
-        raise RuntimeError("Unreachable")
+    @retry(
+        retry=retry_if_exception(_is_engine_busy_exception),
+        stop=stop_after_attempt(20),
+        wait=wait_exponential(multiplier=2, min=2, max=15),
+        before_sleep=_log_retry_attempt,
+        reraise=True,
+    )
+    async def _post_with_retry(self, url: str, json_data: dict, hand_id: int | None = None) -> httpx.Response:
+        response = await self._client.post(url, json=json_data)
+        response.raise_for_status()
+        return response
 
     async def _create_new_hand(self) -> dict:
         request = {"game_name": _DEFAULT_GAME_NAME}
