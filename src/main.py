@@ -10,8 +10,6 @@ from tqdm.asyncio import tqdm
 
 from poker_agent import AllinAgent, CheckCallAgent, PokerAgent
 
-_RETRY_BASE_DELAY = 2.0
-_RETRY_MAX_DELAY = 15.0
 _DEFAULT_GAME_NAME = "HUNL 200BB"
 _API_URL = "https://researcher.gtowizard.com"
 # We limit the number of concurrent hands to 5
