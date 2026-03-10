@@ -29,7 +29,6 @@ def _is_engine_busy_exception(exception: Exception) -> bool:
         HTTPStatus.BAD_GATEWAY,
         HTTPStatus.SERVICE_UNAVAILABLE,
         HTTPStatus.GATEWAY_TIMEOUT,
-        524,  # "A Timeout Occured" - from Cloudflare
     )
 
 
