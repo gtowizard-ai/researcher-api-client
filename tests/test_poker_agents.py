@@ -61,20 +61,23 @@ class TestAllinAgent:
         result = asyncio.run(self.agent.act(resp))
         assert isinstance(result.amount, int)
 
-    def test_no_crash_when_raise_range_is_none(self):
+    def test_falls_back_to_call_when_raise_range_is_none(self):
         resp = _make_response(["f", "c", "b"], raise_range=None)
         result = asyncio.run(self.agent.act(resp))
-        assert result.action in ("c", "f", "b")
+        assert result.action == "c"
+        assert result.amount is None
 
     def test_calls_when_bet_not_available(self):
         resp = _make_response(["f", "c"])
         result = asyncio.run(self.agent.act(resp))
         assert result.action == "c"
+        assert result.amount is None
 
-    def test_action_always_in_legal_actions(self):
+    def test_falls_back_to_first_legal_when_no_call_or_bet(self):
         resp = _make_response(["f"])
         result = asyncio.run(self.agent.act(resp))
-        assert result.action in ["f"]
+        assert result.action == "f"
+        assert result.amount is None
 
 
 # ── CheckCallAgent ──────────────────────────────────────────────
@@ -93,10 +96,10 @@ class TestCheckCallAgent:
         result = asyncio.run(self.agent.act(resp))
         assert result.action == "c"
 
-    def test_no_illegal_action_when_only_fold_and_bet(self):
+    def test_falls_back_to_first_legal_when_no_check_or_call(self):
         resp = _make_response(["f", "b"])
         result = asyncio.run(self.agent.act(resp))
-        assert result.action in ["f", "b"]
+        assert result.action == "f"
 
     def test_single_legal_action(self):
         resp = _make_response(["k"])
@@ -110,11 +113,12 @@ class TestCheckCallAgent:
 class TestRandomUniformAgent:
     agent = RandomUniformAgent()
 
-    def test_no_crash_when_raise_range_is_none(self):
+    def test_never_bets_when_raise_range_is_none(self):
         resp = _make_response(["f", "c", "b"], raise_range=None)
-        for _ in range(20):
+        for _ in range(50):
             result = asyncio.run(self.agent.act(resp))
-            assert result.action in ["f", "c", "b"]
+            assert result.action in ["f", "c"]
+            assert result.amount is None
 
     def test_bet_amount_is_int(self):
         resp = _make_response(["b"], ActionRange(min=4.0, max=200.0))
@@ -130,11 +134,12 @@ class TestRandomUniformAgent:
             if result.action == "b":
                 assert 10 <= result.amount <= 50
 
-    def test_action_always_legal(self):
+    def test_only_samples_from_legal_actions(self):
         resp = _make_response(["f", "c"])
-        for _ in range(20):
+        for _ in range(50):
             result = asyncio.run(self.agent.act(resp))
             assert result.action in ["f", "c"]
+            assert result.amount is None
 
     def test_single_value_range(self):
         resp = _make_response(["b", "c"], ActionRange(min=100.0, max=100.0))
@@ -154,12 +159,12 @@ class TestAlwaysFoldAgent:
         result = asyncio.run(self.agent.act(resp))
         assert result.action == "f"
 
-    def test_no_illegal_action_when_fold_unavailable(self):
+    def test_falls_back_to_first_legal_when_no_fold_or_check(self):
         resp = _make_response(["c", "b"])
         result = asyncio.run(self.agent.act(resp))
-        assert result.action in ["c", "b"]
+        assert result.action == "c"
 
-    def test_checks_when_only_check_available(self):
+    def test_checks_when_fold_unavailable_but_check_is(self):
         resp = _make_response(["k", "b"])
         result = asyncio.run(self.agent.act(resp))
         assert result.action == "k"
